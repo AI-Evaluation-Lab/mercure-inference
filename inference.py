@@ -106,7 +106,7 @@ def main(args=sys.argv[1:]):
         sys.exit(1)
 
     # Create default values for all module settings
-    settings = {"color": "red", "transparency": 0.75, "series_offset": 1000}
+    settings = {"color": "yellow", "transparency": 0.75, "series_offset": 1000}
 
     # Overwrite default values with settings from the task file (if present)
     if task.get("process", ""):
