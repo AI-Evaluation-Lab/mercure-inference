@@ -1,0 +1,5 @@
+pydicom
+scipy
+numpy
+onnxruntime
+Pillow
