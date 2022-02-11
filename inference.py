@@ -8,6 +8,11 @@ import sys, os, json
 from pathlib import Path
 
 
+# Load the model from the ONNX file
+model = rt.InferenceSession('export.onnx')
+input_name = model.get_inputs()[0].name
+
+
 def process_image(file, in_folder, out_folder, series_uid, settings):    
     # Compose the filename of the output DICOM file using the new series UID
     out_filename = series_uid + "#" + file.split("#", 1)[1]
@@ -37,8 +42,6 @@ def process_image(file, in_folder, out_folder, series_uid, settings):
     scl_dcmpixel=np.expand_dims(scl_dcmpixel, axis=0)
 
     # Execute the inference via ONNX Runtime
-    model = rt.InferenceSession('export.onnx')
-    input_name = model.get_inputs()[0].name
     outputs = model.run(None, {input_name: scl_dcmpixel})
 
     # Get segmentation mask and scale back to original resolution
@@ -80,8 +83,8 @@ def process_image(file, in_folder, out_folder, series_uid, settings):
 
 def main(args=sys.argv[1:]):
     print("")
-    print("AI-based prostate-segmentation example for mercure")
-    print("--------------------------------------------------")
+    print("AI-based prostate-segmentation example for mercure (v 0.2)")
+    print("----------------------------------------------------------")
     print("")
 
     # Check if the input and output folders are provided as arguments
