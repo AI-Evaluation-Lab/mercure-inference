@@ -5,7 +5,7 @@ Example module demonstrating the inference of a DL-based segmentation model
 
 This module demonstrates how an AI-based image-processing model can be integrated and deployed with mercure. The module performs a simple slice-by-slice UNET-based segmentation of the prostate and creates a colored segmentation map that is blended with the input images. The module has been written in Python and uses ONNX Runtime as inference engine. Training of the model has been done using the fast.ai / PyTorch libraries, and the model has been exported in the ONNX format. The source code can be used as template for integration of own custom-developed models (in the current form, the processing is done slice-by-slice, but it should be straightforward to modify the code for volume-based processing).
 
-![Example]<img src="example.jpg" width="512" height="512">
+![]<img src="example.jpg" width="320" height="320">
 
 **NOTE:** Purpose of this module is solely to demonstrate how easily AI models can be deployed with mercure. This module should not be used for any practical application (the segmentation model has not been optimized and does not work too well).
 
