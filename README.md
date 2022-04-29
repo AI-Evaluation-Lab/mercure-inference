@@ -25,6 +25,32 @@ series_offset: Offset added to series number (default: 1000)
 
 The model expects T1-weighted 3D GRE prostate series with square image size (we used radial 3D GRASP DCE-MRI scans for training and testing).
 
+## Sample Data
+
+Using the script provided in the subfolder **/sampledata** of this repository, several public DICOM datasets can be downloaded and used to test the segmentation algorithm. These prostate datasets are different from the data used for training the segmentation model. Therefore, the segmentation results are not great, but the datasets suffice for demonstrating how the module works.
+
+If using a Vagrant-based mercure installation, as described in the Quick Start section of the mercure documentation, execute the following steps to download the test data (otherwise, run the script directly in a bash shell on the Linux server):
+
+1. Copy the script **download_sampledata.sh** into the root folder of the Vagrant installation (where the file Vagrantfile is located)
+2. Open an SSH shell by typing
+```
+vagrant ssh
+```
+3. Run the download script by calling
+```
+cd /vagrant
+./download_sampledata.sh
+```
+4. Leave the shell by typing 
+```
+exit
+```
+The sample dataset can now be found in the subfolder **sampledata** of the Vagrant folder. 
+
+To send the datasets to your mercure server, use the dcmsend tool from the Offis DCMTK package, which can be downloaded under this link:
+https://dicom.offis.de/download/dcmtk/dcmtk366/bin/
+
+
 ## Modification
 
 To use the module as template for integration of own custom-developed models, clone the Git repository into your development environment. Edit the Makefile and replace the tag "mercureimaging/mercure-exampleinference" with a tag of your choice (use the name of your own organization in place of "mercureimaging", which will allow you to publish the container image on Docker Hub later). Afterwards, you can build the Docker container locally by calling the "make" command, and you can test the container in mercure by installing the module on the Modules page using the changed tag name. Source-code level modifications need to be done in the file interface.py. If you rename this file, make sure to adapt also the file docker-entrypoint.sh, which is the entry function called by mercure. If you use additional Python libraries, add these libraries to the file requirements.txt to ensure that they get installed when building the container image.
