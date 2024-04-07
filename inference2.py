@@ -11,9 +11,15 @@ from torchvision import transforms
 
 
 # Load the model from the ONNX file
-model = rt.InferenceSession('model.onnx')
+model = rt.InferenceSession('export.onnx')
 input_name = model.get_inputs()[0].name
 
+
+t = torch.nn.Sequential(
+    transforms.Resize((512, 512)),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+)
+scripted_transforms = torch.jit.script(t)
 
 def process_image(file, in_folder, out_folder, series_uid, settings):    
     # Compose the filename of the output DICOM file using the new series UID
@@ -24,45 +30,31 @@ def process_image(file, in_folder, out_folder, series_uid, settings):
     dcm_file_in = Path(in_folder) / file
     dcm = pydicom.dcmread(dcm_file_in)
 
-    # Normalize input image
-    dcmpixel = dcm.pixel_array
-    dcmpixel = ( 1.0 / dcmpixel.max() * (dcmpixel - dcmpixel.min()) )
 
-    # Ensure that the input image has square size
-    if (dcmpixel.shape[0] != dcmpixel.shape[1]):
-        print("Error: Width and height are not equal. Not supported by this module")
-        return False
-
-    # Scale input to 288 pixels, as needed by the DL model
-    inference_zoom = 288/float(dcmpixel.shape[0])
-    scl_dcmpixel = scipy.ndimage.zoom(dcmpixel, inference_zoom, order=3)
-
-    # Shape data for running inference
-    scl_dcmpixel=np.dstack([scl_dcmpixel]*3)
-    scl_dcmpixel=np.rollaxis(scl_dcmpixel,2)
-    scl_dcmpixel=scl_dcmpixel.astype(np.float32)
-    scl_dcmpixel=np.expand_dims(scl_dcmpixel, axis=0)
+    input = preprocess(dcm)
+    input = scripted_transforms(input).cpu().numpy()
 
     # Execute the inference via ONNX Runtime
-    outputs = model.run(None, {input_name: scl_dcmpixel})
+    outputs = model.run(None, {input_name: input})
 
-    # Get segmentation mask and scale back to original resolution
-    mask=outputs[0]
-    binary_mask = np.where(mask[0,0,:,:] > 0.5, 0, 255).astype(np.ubyte)
-    scl_mask = scipy.ndimage.zoom(binary_mask, 1/inference_zoom, order=3)
+    outputs = np.argmax(outputs[0])
 
-    # Colorize segmantation mask
-    mask_image = Image.fromarray(scl_mask)
-    mask_image = ImageOps.colorize(mask_image, black="black", white=settings["color"])
+    text = "Positive" if outputs == 1 else "Negative"
 
     # Normalize the background (input) image
+    dcmpixel = dcm.pixel_array
     background = 255 * ( 1.0 / dcmpixel.max() * (dcmpixel - dcmpixel.min()) )
     background = background.astype(np.ubyte)
     background_image = Image.fromarray(background).convert("RGB")
 
+    overlay_image = overlay_text_on_dicom(file, text)
+    # overlay_image = ImageOps.colorize(overlay_image, black="black", white='yellow')
+
+
     # Blend the two images
-    final_image = Image.blend(mask_image, background_image, settings["transparency"])
-    final_array = np.array(final_image).astype(np.uint8) 
+    final_image = Image.blend(overlay_image, background_image, settings["transparency"])
+    final_array = np.array(final_image).astype(np.uint8)
+
 
     # Write the final image back to a new DICOM (color) image 
     dcm.SeriesInstanceUID = series_uid
@@ -85,14 +77,14 @@ def process_image(file, in_folder, out_folder, series_uid, settings):
 
 def main(args=sys.argv[1:]):
     print("")
-    print("AI-based prostate-segmentation example for mercure (v 0.2)")
+    print("AI based Intercranial Hemorrhage Detection from CT Head without contrast")
     print("----------------------------------------------------------")
     print("")
 
     # Check if the input and output folders are provided as arguments
     if len(sys.argv) < 3:
         print("Error: Missing arguments!")
-        print("Usage: inference.py [input-folder] [output-folder]")
+        print("Usage: inference2.py [input-folder] [output-folder]")
         sys.exit(1)
 
     # Check if the input and output folders actually exist
@@ -142,6 +134,73 @@ def main(args=sys.argv[1:]):
             print("Processing slice " + image_filename)            
             process_image(image_filename, in_folder, out_folder, series_uid, settings)
 
+
+
+def get_first_of_dicom_field_as_int(x):
+    if type(x) == pydicom.multival.MultiValue:
+        return int(x[0])
+    return int(x)
+
+def window_image(img, window_center, window_width, intercept, slope):
+    """
+    Get windowed image from dicom
+
+    Inputs:
+        - original image
+        - window_center
+        - window_width
+        - intercept
+        - slope
+    """
+    img = img * slope + intercept
+    img_min = window_center - window_width // 2
+    img_max = window_center + window_width // 2
+    img[img < img_min] = img_min
+    img[img > img_max] = img_max
+    return img
+
+
+def overlay_text_on_dicom(image_path, text):
+    # Load the DICOM image
+    ds = pydicom.dcmread(image_path)
+
+    # Apply VOI LUT to get the actual pixel data
+    pixel_data = np.zeros((512,512))
+
+    # Create a PIL image from the pixel data
+    img = Image.fromarray(pixel_data)
+
+    # Draw text on the image
+    draw = ImageDraw.Draw(img)
+    draw.text((10, 10), text, fill="red")
+
+    # Save the modified image back to DICOM format
+    img_array = np.array(img)
+    ds.PixelData = img_array.tobytes()
+    # ds.save_as(image_path.replace('.dcm', '_overlay.dcm'))
+
+    return Image.fromarray(ds.pixel_array).convert("RGB")
+
+def preprocess(dcm):
+
+    metadata = {
+        "intercept": dcm.RescaleIntercept,
+        "slope": dcm.RescaleSlope,
+    }
+
+    images = []
+    for window_center, window_width in [[40, 80], [80, 200], [600, 2800]]:
+        metadata["window_center"] = window_center
+        metadata["window_width"] = window_width
+        metadata = {k: get_first_of_dicom_field_as_int(v) for k, v in metadata.items()}
+        # print("Shp:", img_dicom.pixel_array.shape)
+        img = window_image(dcm.pixel_array, **metadata)
+        images.append(img)
+
+    stacked = np.stack(images).astype(np.float32)
+    stacked = stacked[:,:,:,np.newaxis]
+    stacked = np.transpose(stacked, (3, 0, 1, 2))
+    return torch.from_numpy(stacked)
 
 if __name__ == "__main__":
     main()

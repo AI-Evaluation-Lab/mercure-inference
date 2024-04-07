@@ -1,2 +1,2 @@
 build:
-	docker build . -t mercureimaging/mercure-exampleinference:latest
+	docker build . -t arogyakoirala/mercure-inference:latest
