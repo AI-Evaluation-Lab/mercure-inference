@@ -2,7 +2,7 @@ import numpy as np
 import onnxruntime as rt
 import pydicom
 from pydicom.uid import generate_uid
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw
 import scipy.ndimage
 import sys, os, json
 from pathlib import Path
